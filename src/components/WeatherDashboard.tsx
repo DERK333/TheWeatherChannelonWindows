@@ -31,6 +31,7 @@ import {
 import { WeatherResponse, GeocodedLocation, LiveTileState } from "../types";
 import { getWeatherCondition, formatLocalTime, formatLocalDateShort } from "../utils/weatherUtils";
 import WeatherMap from "./WeatherMap";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 interface WeatherDashboardProps {
   darkMode: boolean;
@@ -76,6 +77,12 @@ export default function WeatherDashboard({
   const hourly = weather.hourly;
 
   const currentCondition = getWeatherCondition(current.weather_code);
+
+  const hourlyChartData = hourly.time.slice(0, 24).map((timeStr, idx) => ({
+    time: formatLocalTime(timeStr),
+    temp: Math.round(hourly.temperature_2m[idx]),
+    precip: hourly.precipitation_probability[idx],
+  }));
 
   // Dynamic icon helper to return the matching React component safely
   const renderConditionIcon = (iconName: string, size: number = 24) => {
@@ -353,6 +360,74 @@ export default function WeatherDashboard({
                   </div>
                 );
               })}
+            </div>
+          </section>
+
+          {/* INTERACTIVE TEMPERATURE TREND GRAPH */}
+          <section
+            id="hourly-trend-graph"
+            className={`p-5 rounded-2xl shadow-fluent flex flex-col transition-all border lg:col-span-3 ${
+              darkMode ? "bg-white/5 border-white/5 text-white" : "bg-black/5 border-black/15 text-[#202020]"
+            }`}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <TrendingUp size={16} className="text-[#0078d4]" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                  Hourly Temperature Trend
+                </span>
+              </div>
+            </div>
+            <div className="h-[220px] w-full" style={{ minWidth: 0, minHeight: 0 }}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                <AreaChart data={hourlyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="tempGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#0078d4" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#0078d4" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={darkMode ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)"} />
+                  <XAxis 
+                    dataKey="time" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 10, fill: darkMode ? '#888' : '#888' }} 
+                    dy={10}
+                    interval="preserveStartEnd"
+                    minTickGap={20}
+                  />
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fontSize: 10, fill: darkMode ? '#888' : '#888' }} 
+                    dx={-10}
+                    domain={['auto', 'auto']}
+                    tickFormatter={(val) => `${val}°`}
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: darkMode ? '#1e1f22' : '#ffffff', 
+                      borderColor: darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', 
+                      borderRadius: '8px',
+                      fontSize: '11px',
+                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+                    }} 
+                    itemStyle={{ color: '#0078d4', fontWeight: 'bold' }}
+                    labelStyle={{ color: darkMode ? '#a0a0a0' : '#6b7280', marginBottom: '4px' }}
+                    formatter={(value: number) => [`${value}°C`, 'Temperature']}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="temp" 
+                    stroke="#0078d4" 
+                    strokeWidth={2}
+                    fillOpacity={1} 
+                    fill="url(#tempGradient)" 
+                    activeDot={{ r: 4, strokeWidth: 0, fill: '#0078d4' }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
           </section>
 

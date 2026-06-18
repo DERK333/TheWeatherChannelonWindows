@@ -100,7 +100,6 @@ Style it with authoritative but welcoming language. Include local details from y
           briefing = response.text;
         }
       } catch (aiError: any) {
-        console.error("Gemini grounding analysis failed:", aiError.message);
         // Fallback briefing
         briefing = `Current outlook for ${city} features standard ambient conditions with temperature of ${weatherData.current?.temperature_2m}°C, humidity of ${weatherData.current?.relative_humidity_2m}% and gentle wind patterns. Consider carrying appropriate seasonal attire for current conditions.`;
       }
