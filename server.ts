@@ -1,3 +1,8 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -7,14 +12,18 @@ import { GoogleGenAI } from "@google/genai";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Initialize Express
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 app.use(express.json());
 
-// Lazy-initialized Gemini AI client
+/** Lazily-initialized Gemini AI client — created only when a valid API key is present. */
 let aiClient: GoogleGenAI | null = null;
+
+/**
+ * Returns a shared GoogleGenAI instance, or `null` when `GEMINI_API_KEY` is absent
+ * or still set to the placeholder value.
+ */
 function getGeminiClient(): GoogleGenAI | null {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
