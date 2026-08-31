@@ -7,11 +7,14 @@ import React, { useState } from "react";
 import { BrainCircuit, Tv, PlayCircle, Radio, Sparkles, Volume2, ShieldAlert, Check } from "lucide-react";
 import { WeatherResponse, GeocodedLocation } from "../types";
 
+import { convertTemperature, formatTemperature } from "../utils/weatherUtils";
+
 interface AIBroadcastViewProps {
   darkMode: boolean;
   activeLocation: GeocodedLocation | null;
   weatherData: WeatherResponse | null;
   onTriggerToast: (title: string, message: string, type: "info" | "warning" | "success") => void;
+  temperatureUnit?: "celsius" | "fahrenheit";
 }
 
 export default function AIBroadcastView({
@@ -19,6 +22,7 @@ export default function AIBroadcastView({
   activeLocation,
   weatherData,
   onTriggerToast,
+  temperatureUnit = "celsius",
 }: AIBroadcastViewProps) {
   const [isPlayingBrief, setIsPlayingBrief] = useState(false);
 
@@ -26,6 +30,8 @@ export default function AIBroadcastView({
 
   const { weather, briefing } = weatherData;
   const temp = Math.round(weather.current.temperature_2m);
+  const displayTemp = convertTemperature(temp, temperatureUnit);
+  const displayTempStr = formatTemperature(temp, temperatureUnit);
   const code = weather.current.weather_code;
 
   // Synthesize simulated voice readout
@@ -117,7 +123,7 @@ export default function AIBroadcastView({
               <span className="bg-amber-600 text-[10px] font-bold px-1.5 h-full flex items-center shrink-0 rounded-sm mr-2 z-15 text-white">BULLETIN</span>
               <div className="relative w-full overflow-hidden h-5">
                 <div className="absolute whitespace-nowrap animate-ticker text-[10.5px] font-semibold text-[#60cdff] flex items-center gap-10">
-                  <span>Satellite radar scan active for {activeLocation.name} — Present index {temp}°C</span>
+                  <span>Satellite radar scan active for {activeLocation.name} — Present index {displayTempStr}</span>
                   <span>•</span>
                   <span>Microsoft Store package compilation checklist: Square150x150, Square44x44, Splash ready</span>
                   <span>•</span>
@@ -163,7 +169,7 @@ export default function AIBroadcastView({
           </div>
 
           <div className="space-y-4 text-xs">
-            <p className="opacity-75 leading-relaxed">Recommended clothing specifications dynamically mapped to current temperatures ({temp}°C):</p>
+            <p className="opacity-75 leading-relaxed">Recommended clothing specifications dynamically mapped to current temperatures ({displayTempStr}):</p>
             
             <div className="space-y-3">
               {temp <= 10 ? (

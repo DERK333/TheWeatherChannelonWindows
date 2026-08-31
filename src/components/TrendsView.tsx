@@ -6,15 +6,21 @@
 import React, { useState, useEffect } from "react";
 import { LineChart, Play, Pause, RefreshCw, Layers, ShieldAlert, Navigation } from "lucide-react";
 import { WeatherResponse, GeocodedLocation } from "../types";
-import { formatLocalTime } from "../utils/weatherUtils";
+import { formatLocalTime, convertTemperature, formatTemperature } from "../utils/weatherUtils";
 
 interface TrendsViewProps {
   darkMode: boolean;
   activeLocation: GeocodedLocation | null;
   weatherData: WeatherResponse | null;
+  temperatureUnit?: "celsius" | "fahrenheit";
 }
 
-export default function TrendsView({ darkMode, activeLocation, weatherData }: TrendsViewProps) {
+export default function TrendsView({
+  darkMode,
+  activeLocation,
+  weatherData,
+  temperatureUnit = "celsius",
+}: TrendsViewProps) {
   const [isPlayingRadar, setIsPlayingRadar] = useState(true);
   const [radarFrame, setRadarFrame] = useState(0);
   const [radarIntensity, setRadarIntensity] = useState<"standard" | "storm" | "clear">("storm");
@@ -32,7 +38,8 @@ export default function TrendsView({ darkMode, activeLocation, weatherData }: Tr
 
   const { weather } = weatherData;
   const hours = weather.hourly.time.slice(0, 12); // Map first 12 hours for cleaner visual chart spacing
-  const temps = weather.hourly.temperature_2m.slice(0, 12);
+  const rawTemps = weather.hourly.temperature_2m.slice(0, 12);
+  const temps = rawTemps.map((t) => Math.round(convertTemperature(t, temperatureUnit)));
   const rainProb = weather.hourly.precipitation_probability.slice(0, 12);
 
   // SVG dimensions

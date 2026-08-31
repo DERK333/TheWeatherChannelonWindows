@@ -15,6 +15,7 @@ import {
   Wrench,
   Settings,
   HelpCircle,
+  ShieldAlert,
 } from "lucide-react";
 
 interface NavigationItem {
@@ -27,13 +28,20 @@ interface NavigationViewProps {
   darkMode: boolean;
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  activeAlertCount?: number;
 }
 
-export default function NavigationView({ darkMode, activeTab, setActiveTab }: NavigationViewProps) {
+export default function NavigationView({
+  darkMode,
+  activeTab,
+  setActiveTab,
+  activeAlertCount = 0,
+}: NavigationViewProps) {
   const [expanded, setExpanded] = useState(true);
 
   const primaryItems: NavigationItem[] = [
     { id: "dashboard", label: "Weather Dashboard", icon: <Home size={16} /> },
+    { id: "alerts", label: "Severe Weather & Alerts", icon: <ShieldAlert size={16} className={activeAlertCount > 0 ? "text-amber-400" : ""} /> },
     { id: "trends", label: "Hourly Trends & Radar", icon: <LineChart size={16} /> },
     { id: "broadcast", label: "TWC AI Meteorological Digest", icon: <BrainCircuit size={16} /> },
     { id: "livetiles", label: "Simulated Live Tile Settings", icon: <Grid size={16} /> },
@@ -88,9 +96,16 @@ export default function NavigationView({ darkMode, activeTab, setActiveTab }: Na
                 </div>
 
                 {expanded && (
-                  <span className="text-[12px] truncate font-medium">
-                    {item.label}
-                  </span>
+                  <div className="flex items-center justify-between flex-1 min-w-0 pr-1">
+                    <span className="text-[12px] truncate font-medium">
+                      {item.label}
+                    </span>
+                    {item.id === "alerts" && activeAlertCount > 0 && (
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-red-600 text-white font-bold shrink-0">
+                        {activeAlertCount}
+                      </span>
+                    )}
+                  </div>
                 )}
               </button>
             );

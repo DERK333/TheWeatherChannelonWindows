@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import React from "react";
 import {
   Sun,
   CloudSun,
@@ -15,28 +16,15 @@ import {
   HelpCircle,
 } from "lucide-react";
 
-/** Visual theme data for a specific weather condition. */
 export interface WeatherCondition {
-  /** Human-readable label (e.g. "Clear Sky", "Heavy Rain"). */
   label: string;
-  /** Lucide icon key used for dynamic icon lookup. */
-  icon: string;
-  /** Tailwind text colour class for the icon. */
+  icon: string; // Used for dynamic lookup
   colorClass: string;
   gradientFrom: string;
   gradientTo: string;
-  /** Tailwind background class for the Live Tile. */
   tileBg: string;
 }
 
-/**
- * Maps a WMO weather interpretation code (0–99) to a `WeatherCondition` descriptor.
- *
- * @param code - WMO code from Open-Meteo (`current.weather_code`, etc.)
- * @returns Visual theme data including label, icon key, and Tailwind colour classes.
- *
- * @see https://open-meteo.com/en/docs — "WMO Weather interpretation codes" section
- */
 export function getWeatherCondition(code: number): WeatherCondition {
   // WMO Weather interpretation codes
   switch (code) {
@@ -137,12 +125,7 @@ export function getWeatherCondition(code: number): WeatherCondition {
   }
 }
 
-/**
- * Formats an ISO 8601 datetime string to a localised HH:MM time string.
- *
- * @param isoStr - ISO 8601 string (e.g. "2024-06-15T14:30:00")
- * @returns Localised time string (e.g. "2:30 PM") or "--:--" on failure.
- */
+// Format the date/time string to local readability
 export function formatLocalTime(isoStr: string | undefined): string {
   if (!isoStr) return "--:--";
   try {
@@ -153,12 +136,6 @@ export function formatLocalTime(isoStr: string | undefined): string {
   }
 }
 
-/**
- * Formats an ISO 8601 date string to a short localised date (e.g. "Mon, Jun 15").
- *
- * @param isoStr - ISO 8601 date string (e.g. "2024-06-15")
- * @returns Short date string or "Tomorrow" / "Forecast" on failure.
- */
 export function formatLocalDateShort(isoStr: string | undefined): string {
   if (!isoStr) return "Tomorrow";
   try {
@@ -167,4 +144,18 @@ export function formatLocalDateShort(isoStr: string | undefined): string {
   } catch {
     return "Forecast";
   }
+}
+
+export function convertTemperature(tempCelsius: number, unit: "celsius" | "fahrenheit"): number {
+  if (unit === "fahrenheit") {
+    return (tempCelsius * 9/5) + 32;
+  }
+  return tempCelsius;
+}
+
+export function formatTemperature(tempCelsius: number | undefined, unit: "celsius" | "fahrenheit", includeUnit: boolean = true): string {
+  if (tempCelsius === undefined || isNaN(tempCelsius)) return "--";
+  const converted = convertTemperature(tempCelsius, unit);
+  const symbol = unit === "celsius" ? "°C" : "°F";
+  return `${Math.round(converted)}${includeUnit ? symbol : "°"}`;
 }

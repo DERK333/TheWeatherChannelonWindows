@@ -9,10 +9,12 @@ import NavigationView from "./components/NavigationView";
 import WeatherDashboard from "./components/WeatherDashboard";
 import TrendsView from "./components/TrendsView";
 import AIBroadcastView from "./components/AIBroadcastView";
+import WeatherAlerts from "./components/WeatherAlerts";
 import StorePackager from "./components/StorePackager";
 import ToastManager from "./components/ToastManager";
 import { GeocodedLocation, WeatherResponse, AppToast } from "./types";
-import { Sliders, Wrench, ShieldCheck, Check, Volume2, HardDrive, Terminal } from "lucide-react";
+import { deriveWeatherAlerts, playAlertChime } from "./utils/alertUtils";
+import { Sliders, Wrench, ShieldCheck, Check, Volume2, HardDrive, Terminal, ShieldAlert, Thermometer } from "lucide-react";
 
 export default function App() {
   const [darkMode, setDarkMode] = useState(true);
@@ -22,10 +24,19 @@ export default function App() {
   const [activeLocation, setActiveLocation] = useState<GeocodedLocation | null>(null);
   const [weatherData, setWeatherData] = useState<WeatherResponse | null>(null);
   const [toasts, setToasts] = useState<AppToast[]>([]);
+  const [temperatureUnit, setTemperatureUnit] = useState<"celsius" | "fahrenheit">("celsius");
 
   // User Options Settings
   const [enableChimes, setEnableChimes] = useState(true);
   const [isStoreValidated, setIsStoreValidated] = useState(true);
+
+  // Compute active severe alert count
+  const activeAlerts = (weatherData && activeLocation)
+    ? deriveWeatherAlerts(weatherData.weather, activeLocation)
+    : [];
+  const severeAlertsCount = activeAlerts.filter(
+    (a) => a.severity === "extreme" || a.severity === "severe" || a.severity === "moderate"
+  ).length;
 
   // Trigger Action Center success/warning toasts
   const triggerToast = (title: string, message: string, type: "info" | "warning" | "success" = "info") => {
@@ -38,6 +49,46 @@ export default function App() {
     };
     setToasts((prev) => [newToast, ...prev].slice(0, 5)); // Keep max 5 toasts visible
   };
+
+  // Keyboard shortcut listener for Ctrl+1..7 and Ctrl+F
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
+        if (e.key === "1") {
+          e.preventDefault();
+          setActiveTab("dashboard");
+        } else if (e.key === "2") {
+          e.preventDefault();
+          setActiveTab("alerts");
+        } else if (e.key === "3") {
+          e.preventDefault();
+          setActiveTab("trends");
+        } else if (e.key === "4") {
+          e.preventDefault();
+          setActiveTab("broadcast");
+        } else if (e.key === "5") {
+          e.preventDefault();
+          setActiveTab("livetiles");
+        } else if (e.key === "6") {
+          e.preventDefault();
+          setActiveTab("packager");
+        } else if (e.key === "7") {
+          e.preventDefault();
+          setActiveTab("settings");
+        } else if (e.key.toLowerCase() === "f") {
+          e.preventDefault();
+          const searchInput = document.querySelector('input[type="text"]') as HTMLInputElement | null;
+          if (searchInput) {
+            searchInput.focus();
+            searchInput.select();
+          }
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Default coordinate bootstrap initialization: Seattle, WA (Famous meteorological station)
   useEffect(() => {
@@ -83,7 +134,22 @@ export default function App() {
       const data: WeatherResponse = await weatherRes.json();
       setWeatherData(data);
 
-      if (!isInit) {
+      // Check severe hazards for toast alerting
+      const detectedAlerts = deriveWeatherAlerts(data.weather, loc);
+      const topHazard = detectedAlerts.find(
+        (a) => a.severity === "extreme" || a.severity === "severe"
+      );
+
+      if (topHazard) {
+        triggerToast(
+          `⚠️ ${topHazard.event.toUpperCase()}`,
+          `${topHazard.headline} (Area: ${loc.name})`,
+          "warning"
+        );
+        if (enableChimes) {
+          playAlertChime(topHazard.severity);
+        }
+      } else if (!isInit) {
         triggerToast(
           "Station coordinates updated",
           `Weather forecast loaded for ${loc.name}, ${loc.admin1 || loc.country} via TWC channels!`,
@@ -120,7 +186,12 @@ export default function App() {
       {/* 2. Main Windows App Chassis View Grid */}
       <div className="flex flex-1 overflow-hidden">
         {/* Expanded Navigation Sidebar */}
-        <NavigationView darkMode={darkMode} activeTab={activeTab} setActiveTab={setActiveTab} />
+        <NavigationView
+          darkMode={darkMode}
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          activeAlertCount={severeAlertsCount}
+        />
 
         {/* Dynamic Display workspace (Pane) */}
         <main className="flex-1 flex flex-col overflow-hidden">
@@ -131,6 +202,17 @@ export default function App() {
               activeLocation={activeLocation}
               weatherData={weatherData}
               onTriggerToast={triggerToast}
+              temperatureUnit={temperatureUnit}
+            />
+          )}
+
+          {activeTab === "alerts" && (
+            <WeatherAlerts
+              darkMode={darkMode}
+              activeLocation={activeLocation}
+              weatherData={weatherData}
+              onTriggerToast={triggerToast}
+              compact={false}
             />
           )}
 
@@ -139,6 +221,7 @@ export default function App() {
               darkMode={darkMode}
               activeLocation={activeLocation}
               weatherData={weatherData}
+              temperatureUnit={temperatureUnit}
             />
           )}
 
@@ -148,6 +231,7 @@ export default function App() {
               activeLocation={activeLocation}
               weatherData={weatherData}
               onTriggerToast={triggerToast}
+              temperatureUnit={temperatureUnit}
             />
           )}
 
@@ -157,6 +241,7 @@ export default function App() {
               activeLocation={activeLocation}
               weatherData={weatherData}
               onTriggerToast={triggerToast}
+              temperatureUnit={temperatureUnit}
             />
           )}
 
@@ -175,7 +260,7 @@ export default function App() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 
-                {/* Visual Settings */}
+                {/* Visual & Units Settings */}
                 <section className={`p-5 rounded-md shadow-fluent border ${
                   darkMode ? "bg-[#2a2a2a] border-[#3e3e3e]" : "bg-white border-[#e0e0e0]"
                 }`}>
@@ -203,8 +288,43 @@ export default function App() {
 
                     <div className="flex items-center justify-between border-t border-slate-500/10 pt-3">
                       <div>
-                        <span className="font-semibold block">Atmospheric sound chimes</span>
-                        <p className="text-[10.5px] text-gray-400">Plays dual-sine oscillator harmonic bells on real notifications.</p>
+                        <span className="font-semibold block">Temperature Measurement Unit</span>
+                        <p className="text-[10.5px] text-gray-400">Toggle between Metric (°C) and Imperial (°F) scales.</p>
+                      </div>
+                      <div className="flex rounded-md p-0.5 border border-slate-500/20 bg-black/10">
+                        <button
+                          onClick={() => {
+                            setTemperatureUnit("celsius");
+                            triggerToast("Unit Preference", "Switched display units to Celsius (°C)", "info");
+                          }}
+                          className={`px-2.5 py-1 text-xs rounded font-semibold transition-colors ${
+                            temperatureUnit === "celsius"
+                              ? "bg-[#0078d4] text-white"
+                              : "text-gray-400 hover:text-white"
+                          }`}
+                        >
+                          °C
+                        </button>
+                        <button
+                          onClick={() => {
+                            setTemperatureUnit("fahrenheit");
+                            triggerToast("Unit Preference", "Switched display units to Fahrenheit (°F)", "info");
+                          }}
+                          className={`px-2.5 py-1 text-xs rounded font-semibold transition-colors ${
+                            temperatureUnit === "fahrenheit"
+                              ? "bg-[#0078d4] text-white"
+                              : "text-gray-400 hover:text-white"
+                          }`}
+                        >
+                          °F
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-slate-500/10 pt-3">
+                      <div>
+                        <span className="font-semibold block">Atmospheric sound chimes & warnings</span>
+                        <p className="text-[10.5px] text-gray-400">Plays synthesized emergency sirens and harmonic bells on severe alerts.</p>
                       </div>
                       <button
                         onClick={() => {
@@ -248,6 +368,10 @@ export default function App() {
                       <div className="flex justify-between">
                         <span className="text-gray-500">VERSION ENUMERATION:</span>
                         <span className="text-emerald-400">v1.0.0.0</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">KEYBOARD SHORTCUTS:</span>
+                        <span className="text-emerald-400">Ctrl+1..7 (Tabs), Ctrl+F (Search)</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-500">OAUTH CAPABILITIES:</span>
@@ -295,7 +419,10 @@ export default function App() {
           </span>
           <span>Last updated: {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
         </div>
-        <div>The Weather Channel API v2.4.1</div>
+        <div className="flex items-center gap-3">
+          <span className="hidden sm:inline text-gray-500 font-mono">Press Ctrl+1..7 for quick navigation</span>
+          <span>The Weather Channel API v2.4.1</span>
+        </div>
       </footer>
 
       {/* 3. Render Windows toast alerts at bottom-right viewport */}
@@ -303,3 +430,4 @@ export default function App() {
     </div>
   );
 }
+

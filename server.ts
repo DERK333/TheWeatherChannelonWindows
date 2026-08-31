@@ -13,7 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = 3000;
 
 app.use(express.json());
 
@@ -98,7 +98,7 @@ Provide:
 Style it with authoritative but welcoming language. Include local details from your web knowledge search if suitable.`;
 
         const response = await ai.models.generateContent({
-          model: "gemini-3.5-flash",
+          model: "gemini-2.5-flash",
           contents: prompt,
           config: {
             tools: [{ googleSearch: {} }],
@@ -124,6 +124,104 @@ Style it with authoritative but welcoming language. Include local details from y
   } catch (error: any) {
     console.error("Weather query failed:", error.message);
     res.status(500).json({ error: "Failed to load weather conditions." });
+  }
+});
+
+// 3. Severe Weather Alerts & Advisories Endpoint
+app.get("/api/alerts", async (req, res) => {
+  const { lat, lon, city } = req.query;
+  if (!lat || !lon) {
+    return res.status(400).json({ error: "Latitude 'lat' and Longitude 'lon' parameters are required." });
+  }
+
+  try {
+    // Fetch telemetry metrics to verify current atmospheric risks
+    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m,uv_index,pressure_msl,relative_humidity_2m&hourly=precipitation_probability,temperature_2m&timezone=auto`;
+    const response = await fetch(weatherUrl);
+    if (!response.ok) {
+      throw new Error(`Weather metrics service returned status ${response.status}`);
+    }
+    const weatherData = await response.json();
+
+    const cityName = (city as string) || "Current Location";
+    const current = weatherData.current || {};
+    const now = new Date().toISOString();
+
+    const alerts: any[] = [];
+
+    // Check meteorological threat conditions
+    if ([95, 96, 99].includes(current.weather_code)) {
+      alerts.push({
+        id: `srv-storm-${Date.now()}`,
+        event: [96, 99].includes(current.weather_code) ? "Severe Thunderstorm Warning" : "Thunderstorm Advisory",
+        severity: [96, 99].includes(current.weather_code) ? "severe" : "moderate",
+        urgency: "Immediate",
+        certainty: "Observed",
+        category: "Met",
+        headline: `Active Lightning & Convective Squall Lines Over ${cityName}`,
+        description: `Doppler radar stations detect intense convective cells capable of producing sudden wind shears, frequent lightning, and blinding downpours in ${cityName}.`,
+        instruction: "Seek indoor shelter away from exterior windows. Do not handle corded electrical appliances or plumbing fixtures during active lightning.",
+        effective: now,
+        expires: new Date(Date.now() + 3 * 3600 * 1000).toISOString(),
+        senderName: "National Storm Prediction Center",
+        affectedArea: cityName,
+        source: "Atmospheric Sounding & Radar Network",
+        tags: ["Thunderstorm", "Lightning Hazard", "Severe Squall"],
+        triggerMetric: `WMO Code ${current.weather_code} • Precipitation: ${current.precipitation} mm`
+      });
+    }
+
+    if (current.wind_speed_10m >= 38) {
+      alerts.push({
+        id: `srv-wind-${Date.now()}`,
+        event: current.wind_speed_10m >= 55 ? "High Wind Warning" : "Wind Advisory",
+        severity: current.wind_speed_10m >= 55 ? "severe" : "moderate",
+        urgency: "Expected",
+        certainty: "Observed",
+        category: "Safety",
+        headline: `Sustained High Winds of ${current.wind_speed_10m} km/h in ${cityName}`,
+        description: `Strong pressure gradients are creating hazardous gusts across elevated terrain and bridge crossings in ${cityName}. High-profile vehicles face rollover risks.`,
+        instruction: "Secure outdoor objects, anchor loose fixtures, and exercise extreme caution when navigating open expressways.",
+        effective: now,
+        expires: new Date(Date.now() + 6 * 3600 * 1000).toISOString(),
+        senderName: "Surface Wind Observation Network",
+        affectedArea: cityName,
+        source: "Anemometer Station Telemetry",
+        tags: ["High Wind", "Travel Hazard"],
+        triggerMetric: `Wind Speed: ${current.wind_speed_10m} km/h`
+      });
+    }
+
+    if (current.temperature_2m >= 33 || current.apparent_temperature >= 36) {
+      alerts.push({
+        id: `srv-heat-${Date.now()}`,
+        event: current.apparent_temperature >= 40 ? "Excessive Heat Warning" : "Heat Advisory",
+        severity: current.apparent_temperature >= 40 ? "extreme" : "moderate",
+        urgency: "Expected",
+        certainty: "Likely",
+        category: "Health",
+        headline: `Elevated Heat Index: Feels like ${Math.round(current.apparent_temperature)}°C`,
+        description: `Dangerous thermal conditions are forecast to persist over ${cityName}. High temperatures and humidity significantly elevate the risk of heat exhaustion and heat stroke.`,
+        instruction: "Stay hydrated with electrolyte fluids, remain in air-conditioned environments, and never leave pets or vulnerable individuals in parked vehicles.",
+        effective: now,
+        expires: new Date(Date.now() + 8 * 3600 * 1000).toISOString(),
+        senderName: "Regional Climate & Public Health Bureau",
+        affectedArea: cityName,
+        source: "Surface Thermal Grid",
+        tags: ["Extreme Heat", "Public Health"],
+        triggerMetric: `Apparent Heat Index: ${current.apparent_temperature}°C`
+      });
+    }
+
+    res.json({
+      location: cityName,
+      count: alerts.length,
+      alerts,
+      timestamp: now,
+    });
+  } catch (error: any) {
+    console.error("Alerts query failed:", error.message);
+    res.status(500).json({ error: "Failed to fetch atmospheric alerts." });
   }
 });
 

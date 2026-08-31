@@ -27,10 +27,14 @@ import {
   AppWindow,
   Download,
   Terminal,
+  ShieldAlert,
+  AlertTriangle,
 } from "lucide-react";
 import { WeatherResponse, GeocodedLocation, LiveTileState } from "../types";
-import { getWeatherCondition, formatLocalTime, formatLocalDateShort } from "../utils/weatherUtils";
+import { getWeatherCondition, formatLocalTime, formatLocalDateShort, formatTemperature, convertTemperature } from "../utils/weatherUtils";
+import { deriveWeatherAlerts } from "../utils/alertUtils";
 import WeatherMap from "./WeatherMap";
+import WeatherAlerts from "./WeatherAlerts";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 interface WeatherDashboardProps {
@@ -38,6 +42,7 @@ interface WeatherDashboardProps {
   activeLocation: GeocodedLocation | null;
   weatherData: WeatherResponse | null;
   onTriggerToast: (title: string, message: string, type: "info" | "warning" | "success") => void;
+  temperatureUnit?: "celsius" | "fahrenheit";
 }
 
 export default function WeatherDashboard({
@@ -45,8 +50,9 @@ export default function WeatherDashboard({
   activeLocation,
   weatherData,
   onTriggerToast,
+  temperatureUnit = "celsius",
 }: WeatherDashboardProps) {
-  const [activePivot, setActivePivot] = useState<"summary" | "details" | "tile">("summary");
+  const [activePivot, setActivePivot] = useState<"summary" | "details" | "alerts" | "tile">("summary");
   
   // Simulated Tile State
   const [tileState, setTileState] = useState<LiveTileState>({
@@ -77,10 +83,14 @@ export default function WeatherDashboard({
   const hourly = weather.hourly;
 
   const currentCondition = getWeatherCondition(current.weather_code);
+  const activeAlerts = deriveWeatherAlerts(weather, activeLocation);
+  const hasSevereWarnings = activeAlerts.some(
+    (a) => a.severity === "extreme" || a.severity === "severe" || a.severity === "moderate"
+  );
 
   const hourlyChartData = hourly.time.slice(0, 24).map((timeStr, idx) => ({
     time: formatLocalTime(timeStr),
-    temp: Math.round(hourly.temperature_2m[idx]),
+    temp: Math.round(convertTemperature(hourly.temperature_2m[idx], temperatureUnit)),
     precip: hourly.precipitation_probability[idx],
   }));
 
@@ -161,6 +171,30 @@ export default function WeatherDashboard({
             Analytical Specs
           </button>
           <button
+            onClick={() => setActivePivot("alerts")}
+            className={`px-3 py-1 text-xs rounded-sm transition-all focus:outline-none flex items-center gap-1.5 ${
+              activePivot === "alerts"
+                ? darkMode
+                  ? "bg-[#202020] text-[#60cdff] font-medium shadow-sm"
+                  : "bg-white text-[#0060b0] font-semibold shadow-sm"
+                : hasSevereWarnings
+                ? "text-amber-400 font-semibold hover:text-amber-300"
+                : "text-gray-500 hover:text-gray-900 dark:hover:text-white"
+            }`}
+          >
+            <ShieldAlert size={12} className={hasSevereWarnings ? "text-amber-400 animate-pulse" : ""} />
+            <span>Alerts & Warnings</span>
+            {activeAlerts.length > 0 && (
+              <span
+                className={`text-[9.5px] px-1.5 py-0.2 rounded-full font-mono ${
+                  hasSevereWarnings ? "bg-red-600 text-white" : "bg-slate-500/20 text-gray-400"
+                }`}
+              >
+                {activeAlerts.length}
+              </span>
+            )}
+          </button>
+          <button
             onClick={() => setActivePivot("tile")}
             className={`px-3 py-1 text-xs rounded-sm transition-all focus:outline-none flex items-center gap-1.5 ${
               activePivot === "tile"
@@ -175,6 +209,18 @@ export default function WeatherDashboard({
           </button>
         </div>
       </div>
+
+      {/* COMPACT SEVERE WEATHER BANNER (Visible on Overview) */}
+      {activePivot === "summary" && (
+        <WeatherAlerts
+          darkMode={darkMode}
+          activeLocation={activeLocation}
+          weatherData={weatherData}
+          onTriggerToast={onTriggerToast}
+          compact={true}
+          onViewAllAlerts={() => setActivePivot("alerts")}
+        />
+      )}
 
       {/* METEOROLOGICAL BLOCKS IN OVERVIEW TAB */}
       {activePivot === "summary" && (
@@ -213,13 +259,13 @@ export default function WeatherDashboard({
             <div className="my-6">
               <div className="flex items-start">
                 <span className="text-6xl font-extrabold tracking-tight font-sans">
-                  {Math.round(current.temperature_2m)}
+                  {Math.round(convertTemperature(current.temperature_2m, temperatureUnit))}
                 </span>
-                <span className="text-2xl font-semibold mt-1">°C</span>
+                <span className="text-2xl font-semibold mt-1">°{temperatureUnit === "celsius" ? "C" : "F"}</span>
               </div>
               <div className="text-xs text-gray-400 mt-1.5 flex items-center gap-3">
                 <span className="flex items-center gap-0.5">
-                  RealFeel: <strong className="text-gray-300 dark:text-gray-150">{Math.round(current.apparent_temperature)}°C</strong>
+                  RealFeel: <strong className="text-gray-300 dark:text-gray-150">{formatTemperature(current.apparent_temperature, temperatureUnit)}</strong>
                 </span>
                 <span>•</span>
                 <span className="flex items-center gap-0.5">
@@ -350,7 +396,7 @@ export default function WeatherDashboard({
                       {renderConditionIcon(cond.icon, 20)}
                     </div>
                     <span className="text-xs font-bold font-mono">
-                      {Math.round(hourTemp)}°C
+                      {formatTemperature(hourTemp, temperatureUnit)}
                     </span>
                     
                     {/* Precip chance */}
@@ -378,56 +424,58 @@ export default function WeatherDashboard({
                 </span>
               </div>
             </div>
-            <div className="h-[220px] w-full" style={{ minWidth: 0, minHeight: 0 }}>
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                <AreaChart data={hourlyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="tempGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#0078d4" stopOpacity={0.4} />
-                      <stop offset="95%" stopColor="#0078d4" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={darkMode ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)"} />
-                  <XAxis 
-                    dataKey="time" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fontSize: 10, fill: darkMode ? '#888' : '#888' }} 
-                    dy={10}
-                    interval="preserveStartEnd"
-                    minTickGap={20}
-                  />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fontSize: 10, fill: darkMode ? '#888' : '#888' }} 
-                    dx={-10}
-                    domain={['auto', 'auto']}
-                    tickFormatter={(val) => `${val}°`}
-                  />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: darkMode ? '#1e1f22' : '#ffffff', 
-                      borderColor: darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', 
-                      borderRadius: '8px',
-                      fontSize: '11px',
-                      boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
-                    }} 
-                    itemStyle={{ color: '#0078d4', fontWeight: 'bold' }}
-                    labelStyle={{ color: darkMode ? '#a0a0a0' : '#6b7280', marginBottom: '4px' }}
-                    formatter={(value: number) => [`${value}°C`, 'Temperature']}
-                  />
-                  <Area 
-                    type="monotone" 
-                    dataKey="temp" 
-                    stroke="#0078d4" 
-                    strokeWidth={2}
-                    fillOpacity={1} 
-                    fill="url(#tempGradient)" 
-                    activeDot={{ r: 4, strokeWidth: 0, fill: '#0078d4' }}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+            <div className="w-full h-[220px] min-h-[220px] min-w-0 relative">
+              {hourlyChartData.length > 0 && (
+                <ResponsiveContainer width="100%" height={220} minWidth={100} minHeight={220} debounce={50}>
+                  <AreaChart data={hourlyChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="tempGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#0078d4" stopOpacity={0.4} />
+                        <stop offset="95%" stopColor="#0078d4" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={darkMode ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)"} />
+                    <XAxis 
+                      dataKey="time" 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fontSize: 10, fill: darkMode ? '#888' : '#888' }} 
+                      dy={10}
+                      interval="preserveStartEnd"
+                      minTickGap={20}
+                    />
+                    <YAxis 
+                      axisLine={false} 
+                      tickLine={false} 
+                      tick={{ fontSize: 10, fill: darkMode ? '#888' : '#888' }} 
+                      dx={-10}
+                      domain={['auto', 'auto']}
+                      tickFormatter={(val) => `${val}°`}
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: darkMode ? '#1e1f22' : '#ffffff', 
+                        borderColor: darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)', 
+                        borderRadius: '8px',
+                        fontSize: '11px',
+                        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+                      }} 
+                      itemStyle={{ color: '#0078d4', fontWeight: 'bold' }}
+                      labelStyle={{ color: darkMode ? '#a0a0a0' : '#6b7280', marginBottom: '4px' }}
+                      formatter={(value: number) => [`${value}°${temperatureUnit === 'celsius' ? 'C' : 'F'}`, 'Temperature']}
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="temp" 
+                      stroke="#0078d4" 
+                      strokeWidth={2}
+                      fillOpacity={1} 
+                      fill="url(#tempGradient)" 
+                      activeDot={{ r: 4, strokeWidth: 0, fill: '#0078d4' }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </section>
 
@@ -484,8 +532,8 @@ export default function WeatherDashboard({
                       
                       {/* High/Low bar */}
                       <div className="flex justify-center items-center gap-2 mt-1.5 font-mono text-xs">
-                        <span className="font-extrabold text-white dark:text-gray-100">{Math.round(maxT)}°</span>
-                        <span className="text-gray-500 font-medium">{Math.round(minT)}°</span>
+                        <span className="font-extrabold text-white dark:text-gray-100">{formatTemperature(maxT, temperatureUnit, false)}°</span>
+                        <span className="text-gray-500 font-medium">{formatTemperature(minT, temperatureUnit, false)}°</span>
                       </div>
 
                       {/* Rain maximum prob */}
@@ -602,6 +650,19 @@ export default function WeatherDashboard({
             </div>
           </section>
 
+        </div>
+      )}
+
+      {/* METEOROLOGICAL SEVERE ALERTS WORKSPACE TAB */}
+      {activePivot === "alerts" && (
+        <div className="space-y-4">
+          <WeatherAlerts
+            darkMode={darkMode}
+            activeLocation={activeLocation}
+            weatherData={weatherData}
+            onTriggerToast={onTriggerToast}
+            compact={false}
+          />
         </div>
       )}
 
@@ -740,7 +801,7 @@ export default function WeatherDashboard({
                   {tileState.size === "small" && (
                     <div className="flex flex-col items-center text-white">
                       {tileState.showIcon && renderConditionIcon(currentCondition.icon, 20)}
-                      {tileState.showTemp && <div className="text-sm font-bold font-mono mt-1">{Math.round(current.temperature_2m)}°</div>}
+                      {tileState.showTemp && <div className="text-sm font-bold font-mono mt-1">{Math.round(convertTemperature(current.temperature_2m, temperatureUnit))}°</div>}
                     </div>
                   )}
 
@@ -752,7 +813,7 @@ export default function WeatherDashboard({
                         {tileState.showIcon && renderConditionIcon(currentCondition.icon, 22)}
                       </div>
                       <div>
-                        {tileState.showTemp && <p className="text-3xl font-extrabold font-mono leading-none">{Math.round(current.temperature_2m)}°C</p>}
+                        {tileState.showTemp && <p className="text-3xl font-extrabold font-mono leading-none">{formatTemperature(current.temperature_2m, temperatureUnit)}</p>}
                         <p className="font-semibold text-gray-350 tracking-tight mt-1 truncate">{activeLocation.name}</p>
                       </div>
                     </div>
@@ -772,8 +833,8 @@ export default function WeatherDashboard({
                       
                       <div className="flex justify-between items-end border-t border-white/10 pt-2 text-[11px]">
                         <div>
-                          {tileState.showTemp && <span className="text-2xl font-extrabold font-mono">{Math.round(current.temperature_2m)}°C</span>}
-                          <span className="text-gray-300 ml-1.5 text-[9.5px]">Apparent: {Math.round(current.apparent_temperature)}°</span>
+                          {tileState.showTemp && <span className="text-2xl font-extrabold font-mono">{formatTemperature(current.temperature_2m, temperatureUnit)}</span>}
+                          <span className="text-gray-300 ml-1.5 text-[9.5px]">Apparent: {Math.round(convertTemperature(current.apparent_temperature, temperatureUnit))}°</span>
                         </div>
                         <div className="text-right text-[10px] text-gray-400">
                           ☔ Rain: {hourly.precipitation_probability[0]}%
@@ -812,10 +873,10 @@ export default function WeatherDashboard({
 
                       <div className="flex justify-between items-end border-t border-white/10 pt-2">
                         <div>
-                          {tileState.showTemp && <span className="text-4xl font-black font-mono leading-none">{Math.round(current.temperature_2m)}°C</span>}
+                          {tileState.showTemp && <span className="text-4xl font-black font-mono leading-none">{formatTemperature(current.temperature_2m, temperatureUnit)}</span>}
                         </div>
                         <div className="text-right text-[10px] text-gray-300">
-                          RealFeel: {Math.round(current.apparent_temperature)}°C
+                          RealFeel: {formatTemperature(current.apparent_temperature, temperatureUnit)}
                         </div>
                       </div>
                     </div>
@@ -837,7 +898,7 @@ export default function WeatherDashboard({
     <binding template="Tile${tileState.size === "wide" ? "Wide310x150" : tileState.size === "large" ? "Large310x310" : "Medium15x15"}ImageAndText01">
       <image id="1" src="Assets/WeatherActiveLogo.png"/>
       <text id="1">${activeLocation.name}</text>
-      <text id="2">${Math.round(current.temperature_2m)}°C - ${currentCondition.label}</text>
+      <text id="2">${Math.round(convertTemperature(current.temperature_2m, temperatureUnit))}°${temperatureUnit === 'celsius' ? 'C' : 'F'} - ${currentCondition.label}</text>
     </binding>
   </visual>
 </tile>`}

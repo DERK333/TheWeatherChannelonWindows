@@ -111,6 +111,37 @@ export interface WeatherResponse {
   briefing: string | null;
   /** Attribution string for the data source. */
   provider: string;
+  /** Active severe weather warnings and advisories. */
+  alerts?: WeatherAlert[];
+}
+
+/** Severity rating for meteorological warnings. */
+export type AlertSeverity = "extreme" | "severe" | "moderate" | "minor" | "advisory";
+
+/** Urgency level for weather notifications. */
+export type AlertUrgency = "Immediate" | "Expected" | "Future" | "Past";
+
+/** Certainty probability for meteorological events. */
+export type AlertCertainty = "Observed" | "Likely" | "Possible";
+
+/** Common Alerting Protocol (CAP) structured weather alert. */
+export interface WeatherAlert {
+  id: string;
+  event: string;
+  severity: AlertSeverity;
+  urgency: AlertUrgency;
+  certainty: AlertCertainty;
+  category: "Met" | "Safety" | "Health" | "Marine" | "Fire";
+  headline: string;
+  description: string;
+  instruction: string;
+  effective: string;
+  expires: string;
+  senderName: string;
+  affectedArea: string;
+  source: string;
+  tags: string[];
+  triggerMetric?: string;
 }
 
 /** Payload for a Windows-style Action Center toast notification. */
