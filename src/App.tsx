@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "motion/react";
 import TitleBar from "./components/TitleBar";
 import NavigationView from "./components/NavigationView";
 import WeatherDashboard from "./components/WeatherDashboard";
@@ -194,8 +195,20 @@ export default function App() {
         />
 
         {/* Dynamic Display workspace (Pane) */}
-        <main className="flex-1 flex flex-col overflow-hidden">
-          {/* Active module selection rendering */}
+        <main className="flex-1 flex flex-col overflow-hidden relative">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{
+                duration: 0.2,
+                ease: [0.1, 0.9, 0.2, 1.0],
+              }}
+              className="flex-1 flex flex-col overflow-hidden w-full h-full"
+            >
+              {/* Active module selection rendering */}
           {activeTab === "dashboard" && (
             <WeatherDashboard
               darkMode={darkMode}
@@ -405,6 +418,8 @@ export default function App() {
               </div>
             </div>
           )}
+            </motion.div>
+          </AnimatePresence>
         </main>
       </div>
 

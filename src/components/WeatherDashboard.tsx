@@ -35,6 +35,8 @@ import { getWeatherCondition, formatLocalTime, formatLocalDateShort, formatTempe
 import { deriveWeatherAlerts } from "../utils/alertUtils";
 import WeatherMap from "./WeatherMap";
 import WeatherAlerts from "./WeatherAlerts";
+import WindSpeedGauge from "./WindSpeedGauge";
+import { motion, AnimatePresence } from "motion/react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 interface WeatherDashboardProps {
@@ -210,17 +212,29 @@ export default function WeatherDashboard({
         </div>
       </div>
 
-      {/* COMPACT SEVERE WEATHER BANNER (Visible on Overview) */}
-      {activePivot === "summary" && (
-        <WeatherAlerts
-          darkMode={darkMode}
-          activeLocation={activeLocation}
-          weatherData={weatherData}
-          onTriggerToast={onTriggerToast}
-          compact={true}
-          onViewAllAlerts={() => setActivePivot("alerts")}
-        />
-      )}
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={activePivot}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={{
+            duration: 0.18,
+            ease: [0.1, 0.9, 0.2, 1.0],
+          }}
+          className="space-y-6"
+        >
+          {/* COMPACT SEVERE WEATHER BANNER (Visible on Overview) */}
+          {activePivot === "summary" && (
+            <WeatherAlerts
+              darkMode={darkMode}
+              activeLocation={activeLocation}
+              weatherData={weatherData}
+              onTriggerToast={onTriggerToast}
+              compact={true}
+              onViewAllAlerts={() => setActivePivot("alerts")}
+            />
+          )}
 
       {/* METEOROLOGICAL BLOCKS IN OVERVIEW TAB */}
       {activePivot === "summary" && (
@@ -274,20 +288,24 @@ export default function WeatherDashboard({
               </div>
             </div>
 
-            {/* Micro details row */}
-            <div className={`pt-4 border-t ${darkMode ? "border-[#3d3d3d]" : "border-[#e9e9e9]"} grid grid-cols-2 gap-4 text-xs`}>
-              <div className="flex items-center gap-2">
-                <Wind size={15} className="text-cyan-400" />
-                <div>
-                  <div className="text-gray-400 text-[10px]">WIND SPEED</div>
-                  <div className="font-semibold">{current.wind_speed_10m} km/h</div>
+            {/* Micro details row with Circular Wind Speed Gauge */}
+            <div className={`pt-4 border-t ${darkMode ? "border-[#3d3d3d]" : "border-[#e9e9e9]"} flex flex-col gap-3`}>
+              <WindSpeedGauge
+                darkMode={darkMode}
+                windSpeedKmh={current.wind_speed_10m}
+                windDirectionDeg={current.wind_direction_10m}
+                compact={true}
+              />
+              <div className="flex justify-between items-center text-xs pt-2 border-t border-slate-500/10">
+                <div className="flex items-center gap-1.5">
+                  <Droplets size={14} className="text-[#0078d4]" />
+                  <span className="text-gray-400 text-[10px]">HUMIDITY</span>
+                  <span className="font-semibold text-gray-200 dark:text-gray-100">{current.relative_humidity_2m}%</span>
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Droplets size={15} className="text-[#0078d4]" />
-                <div>
-                  <div className="text-gray-400 text-[10px]">HUMIDITY</div>
-                  <div className="font-semibold">{current.relative_humidity_2m}%</div>
+                <div className="flex items-center gap-1.5">
+                  <Sun size={14} className="text-amber-400" />
+                  <span className="text-gray-400 text-[10px]">UV INDEX</span>
+                  <span className="font-semibold text-gray-200 dark:text-gray-100">{current.uv_index.toFixed(1)}</span>
                 </div>
               </div>
             </div>
@@ -554,16 +572,28 @@ export default function WeatherDashboard({
       {activePivot === "details" && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           
+          {/* PRIMARY: Full Circular Wind Speed & Direction Gauge (2 columns) */}
+          <div className="md:col-span-2 lg:col-span-2">
+            <WindSpeedGauge
+              darkMode={darkMode}
+              windSpeedKmh={current.wind_speed_10m}
+              windDirectionDeg={current.wind_direction_10m}
+              compact={false}
+            />
+          </div>
+
           {/* Air Pressure & UV metrics widget */}
-          <div className={`p-5 rounded-2xl shadow-fluent border ${darkMode ? "bg-white/5 border-white/5 text-white" : "bg-black/5 border-black/15 text-[#202020]"}`}>
-            <span className="text-[10px] font-mono uppercase text-[#0078d4] font-semibold">Sunlight & Radiation Index</span>
-            <div className="flex items-center gap-3 mt-4">
-              <Sun className="text-orange-400 animate-spin-lazy" size={32} />
-              <div>
-                <div className="text-gray-400 text-[10px]">ULTRAVIOLET RATING</div>
-                <div className="text-xl font-bold">{current.uv_index.toFixed(1)} UV</div>
-                <div className="text-[10px] text-orange-400 font-semibold mt-0.5">
-                  {current.uv_index <= 2 ? "Safe low exposure" : current.uv_index <= 5 ? "Moderate risk" : "High (Sunscreen recommended)"}
+          <div className={`p-5 rounded-2xl shadow-fluent border flex flex-col justify-between ${darkMode ? "bg-white/5 border-white/5 text-white" : "bg-black/5 border-black/15 text-[#202020]"}`}>
+            <div>
+              <span className="text-[10px] font-mono uppercase text-[#0078d4] font-semibold">Sunlight & Radiation Index</span>
+              <div className="flex items-center gap-3 mt-4">
+                <Sun className="text-orange-400 animate-spin-lazy" size={32} />
+                <div>
+                  <div className="text-gray-400 text-[10px]">ULTRAVIOLET RATING</div>
+                  <div className="text-xl font-bold">{current.uv_index.toFixed(1)} UV</div>
+                  <div className="text-[10px] text-orange-400 font-semibold mt-0.5">
+                    {current.uv_index <= 2 ? "Safe low exposure" : current.uv_index <= 5 ? "Moderate risk" : "High (Sunscreen recommended)"}
+                  </div>
                 </div>
               </div>
             </div>
@@ -576,33 +606,17 @@ export default function WeatherDashboard({
             </div>
           </div>
 
-          {/* Wind Speed and Direction Dial block */}
-          <div className={`p-5 rounded-2xl shadow-fluent border ${darkMode ? "bg-white/5 border-white/5 text-white" : "bg-black/5 border-black/15 text-[#202020]"}`}>
-            <span className="text-[10px] font-mono uppercase text-[#0078d4] font-semibold">Anemometer & Wind Dial</span>
-            <div className="flex items-center gap-3 mt-4">
-              <Compass className="text-cyan-400 rotate-12" size={32} />
-              <div>
-                <div className="text-gray-400 text-[10px]">CURRENT VECTOR</div>
-                <div className="text-xl font-bold">{current.wind_speed_10m} km/h</div>
-                <div className="text-[10px] text-cyan-400 font-medium">Bearing angle: {current.wind_direction_10m}°</div>
-              </div>
-            </div>
-
-            <div className="mt-5 pt-4 border-t border-slate-500/10 text-xs text-gray-300 dark:text-gray-400 flex justify-between items-center">
-              <span>Standard MS forecast scale</span>
-              <span className="text-[10px] font-mono">10m Altitude</span>
-            </div>
-          </div>
-
           {/* Atmospheric pressure density widget */}
-          <div className={`p-5 rounded-2xl shadow-fluent border ${darkMode ? "bg-white/5 border-white/5 text-white" : "bg-black/5 border-black/15 text-[#202020]"}`}>
-            <span className="text-[10px] font-mono uppercase text-[#0078d4] font-semibold">Barometric Pressure Dynamics</span>
-            <div className="flex items-center gap-3 mt-4">
-              <Gauge className="text-teal-400" size={32} />
-              <div>
-                <div className="text-gray-400 text-[10px]">SEA LEVEL READING</div>
-                <div className="text-xl font-bold">{current.pressure_msl} hPa</div>
-                <div className="text-[10px] text-green-400 font-medium mt-0.5">Atmosphere density stable</div>
+          <div className={`p-5 rounded-2xl shadow-fluent border flex flex-col justify-between ${darkMode ? "bg-white/5 border-white/5 text-white" : "bg-black/5 border-black/15 text-[#202020]"}`}>
+            <div>
+              <span className="text-[10px] font-mono uppercase text-[#0078d4] font-semibold">Barometric Pressure Dynamics</span>
+              <div className="flex items-center gap-3 mt-4">
+                <Gauge className="text-teal-400" size={32} />
+                <div>
+                  <div className="text-gray-400 text-[10px]">SEA LEVEL READING</div>
+                  <div className="text-xl font-bold">{current.pressure_msl} hPa</div>
+                  <div className="text-[10px] text-green-400 font-medium mt-0.5">Atmosphere density stable</div>
+                </div>
               </div>
             </div>
 
@@ -613,19 +627,21 @@ export default function WeatherDashboard({
           </div>
 
           {/* Solar Daylight intervals */}
-          <div className={`p-5 rounded-2xl shadow-fluent border ${darkMode ? "bg-white/5 border-white/5 text-white" : "bg-black/5 border-black/15 text-[#202020]"}`}>
-            <span className="text-[10px] font-mono uppercase text-[#0078d4] font-semibold">Daylight Solar Cycle</span>
-            <div className="my-3 space-y-2 text-xs">
-              <div className="flex justify-between items-center p-1.5 rounded-sm bg-slate-500/5">
-                <span className="text-amber-400 font-semibold flex items-center gap-1">🌅 Sunrise:</span>
-                <span className="font-mono font-bold">{formatLocalTime(daily.sunrise[0])}</span>
+          <div className={`p-5 rounded-2xl shadow-fluent border md:col-span-2 lg:col-span-4 ${darkMode ? "bg-white/5 border-white/5 text-white" : "bg-black/5 border-black/15 text-[#202020]"}`}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-mono uppercase text-[#0078d4] font-semibold">Daylight Solar Cycle & Astronomical Vector</span>
+              <span className="text-[10px] text-gray-400">Local Timezone ({weather.timezone_abbreviation})</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+              <div className="flex justify-between items-center p-3 rounded-xl bg-slate-500/5 border border-white/5">
+                <span className="text-amber-400 font-semibold flex items-center gap-2 text-xs">🌅 Astronomical Sunrise:</span>
+                <span className="font-mono font-bold text-sm">{formatLocalTime(daily.sunrise[0])}</span>
               </div>
-              <div className="flex justify-between items-center p-1.5 rounded-sm bg-slate-500/5">
-                <span className="text-indigo-400 font-semibold flex items-center gap-1">🌆 Sunset:</span>
-                <span className="font-mono font-bold">{formatLocalTime(daily.sunset[0])}</span>
+              <div className="flex justify-between items-center p-3 rounded-xl bg-slate-500/5 border border-white/5">
+                <span className="text-indigo-400 font-semibold flex items-center gap-2 text-xs">🌆 Astronomical Sunset:</span>
+                <span className="font-mono font-bold text-sm">{formatLocalTime(daily.sunset[0])}</span>
               </div>
             </div>
-            <div className="text-[10px] text-gray-400 text-center">Solar coordinates automatically configured for timezone</div>
           </div>
 
           <section className={`p-5 rounded-2xl shadow-fluent border md:col-span-2 lg:col-span-4 ${darkMode ? "bg-white/5 border-white/5 text-white" : "bg-black/5 border-black/15 text-[#202020]"}`}>
@@ -910,6 +926,8 @@ export default function WeatherDashboard({
 
         </div>
       )}
+        </motion.div>
+      </AnimatePresence>
 
     </div>
   );
